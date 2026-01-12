@@ -1,35 +1,5 @@
-﻿---
-title: PDF Table Extractor
-emoji: 
-colorFrom: blue
-colorTo: purple
-sdk: docker
-app_file: app.py
-pinned: false
----
+﻿# PDF Table Extractor
 
-# PDF Table Extractor
+Flask app for extracting tables from PDF using GigaChat API.
 
-Flask приложение для извлечения таблиц из PDF файлов с помощью GigaChat API.
-
-##  Использование
-
-1. Загрузите PDF файл с таблицей
-2. Введите API ключ GigaChat
-3. Нажмите "Извлечь таблицу из PDF"
-4. Получите результат в виде таблицы или JSON
-
-##  Технологии
-
-- Flask (Python)
-- GigaChat API
-- HTML/CSS/JavaScript
-
-##  Ссылки
-
-- [GitHub репозиторий](https://github.com/Ckripok/PDF-Table-Extractor)
-- [GigaChat API](https://developers.sber.ru)
-
-##  Лицензия
-
-MIT
+GitHub: https://github.com/Ckripok/PDF-Table-Extractor
