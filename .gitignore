@@ -6,12 +6,8 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 .env
-.venv
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # Flask
 instance/
@@ -38,18 +34,9 @@ temp/
 test_files/
 
 # PyCharm
-.idea/
 *.iml
 *.ipr
 *.iws
 
-__pycache__/
-*.pyc
-*.pyo
-.env
-.venv/
-venv/
-.DS_Store
-instance/
-.webassets-cache
-uploads/
+# Virtual environment
+pyvenv.cfg
