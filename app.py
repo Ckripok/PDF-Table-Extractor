@@ -6,11 +6,15 @@ PDF Table Extractor - Flask сервер для работы с GigaChat API
 import os
 import json
 import tempfile
+from dotenv import load_dotenv
 import requests
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import urllib3
+
+load_dotenv()
+PORT = int(os.environ.get("PORT", 5000))
 
 # Отключаем предупреждения о небезопасных SSL-соединениях (для разработки)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -311,3 +315,22 @@ if __name__ == '__main__':
         threaded=True
     )
 
+
+if __name__ == '__main__':
+    # Создаем необходимые папки
+    os.makedirs('static', exist_ok=True)
+    os.makedirs('templates', exist_ok=True)
+    os.makedirs('uploads', exist_ok=True)
+
+    print("=" * 60)
+    print("PDF Table Extractor Server")
+    print("=" * 60)
+    print(f"Сервер запущен на порту {PORT}")
+    print("=" * 60)
+
+    # Запускаем сервер
+    app.run(
+        host='0.0.0.0',
+        port=PORT,
+        debug=False  # В продакшне debug должен быть False!
+    )

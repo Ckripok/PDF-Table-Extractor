@@ -1,3 +1,11 @@
+# Railway
+railway.toml
+*.railway
+
+# Environment
+.env
+.env.local
+
 # Python
 __pycache__/
 *.py[cod]
@@ -6,12 +14,8 @@ __pycache__/
 .Python
 env/
 venv/
-.env
-.venv
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.venv/
+ENV/
 
 # Flask
 instance/
