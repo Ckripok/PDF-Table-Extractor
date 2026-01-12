@@ -1,0 +1,7 @@
+title: PDF Table Extractor
+emoji: 📊
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: true
+app_file: app.py

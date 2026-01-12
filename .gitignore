@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.env
+
+# Flask
+instance/
+.webassets-cache
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Логи и БД
+*.log
+*.sqlite3
+*.db
+
+# Папки проекта
+uploads/
+temp/
+test_files/
+
+# PyCharm
+*.iml
+*.ipr
+*.iws
+
+# Virtual environment
+pyvenv.cfg
