@@ -1,17 +1,19 @@
-# Python
+﻿# Python
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
+*.pyo
+*.class
 *.so
 .Python
 env/
 venv/
 .venv/
-.env
+ENV/
 
-# Flask
-instance/
-.webassets-cache
+# Virtual environment
+Lib/
+Scripts/
+pyvenv.cfg
 
 # IDE
 .idea/
@@ -37,6 +39,3 @@ test_files/
 *.iml
 *.ipr
 *.iws
-
-# Virtual environment
-pyvenv.cfg
