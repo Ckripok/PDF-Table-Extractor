@@ -1,336 +1,150 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 """
-PDF Table Extractor - Flask сервер для работы с GigaChat API
+Скрипт для подготовки проекта к деплою на Hugging Face Spaces
 """
 
 import os
-import json
-import tempfile
-from dotenv import load_dotenv
-import requests
-from flask import Flask, request, jsonify, render_template, send_from_directory
-from flask_cors import CORS
-from werkzeug.utils import secure_filename
-import urllib3
-
-load_dotenv()
-PORT = int(os.environ.get("PORT", 5000))
-
-# Отключаем предупреждения о небезопасных SSL-соединениях (для разработки)
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-app = Flask(__name__)
-CORS(app)  # Разрешаем CORS для всех доменов
-
-# Конфигурация
-app.config['SECRET_KEY'] = 'your-secret-key-here-change-in-production'
-app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()  # Используем временную папку
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Максимальный размер файла 50MB
-
-# Конфигурация GigaChat API
-OAUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-GIGACHAT_URL = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
-UPLOAD_URL = "https://gigachat.devices.sberbank.ru/api/v1/files"
+import shutil
+import subprocess
 
 
-def allowed_file(filename):
-    """Проверяем, что файл имеет допустимое расширение"""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'pdf'
+def create_structure():
+    """Создает правильную структуру проекта"""
+    print("📁 Создание структуры проекта...")
+
+    # Создаем папки если их нет
+    folders = ['static', 'templates']
+    for folder in folders:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+            print(f"  ✅ Создана папка: {folder}")
+        else:
+            print(f"  ✅ Папка уже существует: {folder}")
+
+    # Проверяем наличие script.js в static/
+    if os.path.exists('script.js'):
+        shutil.move('script.js', 'static/script.js')
+        print("  ✅ script.js перемещен в static/")
+
+    return True
 
 
-@app.route('/')
-def index():
-    """Главная страница"""
-    return render_template('index.html')
+def check_files():
+    """Проверяет наличие необходимых файлов"""
+    print("\n🔍 Проверка файлов...")
+
+    required_files = ['app.py', 'requirements.txt', 'Dockerfile']
+    missing_files = []
+
+    for file in required_files:
+        if os.path.exists(file):
+            print(f"  ✅ {file}")
+        else:
+            print(f"  ❌ {file} - ОТСУТСТВУЕТ!")
+            missing_files.append(file)
+
+    if missing_files:
+        print(f"\n⚠️  Не хватает файлов: {missing_files}")
+        return False
+
+    return True
 
 
-@app.route('/api/oauth', methods=['POST'])  # Убедитесь, что есть methods=['POST']
-def get_oauth_token():
-    """Получение токена доступа через API ключ"""
+def clean_unnecessary():
+    """Удаляет ненужные файлы для HF"""
+    print("\n🗑️  Очистка ненужных файлов...")
+
+    files_to_remove = [
+        'railway.json',
+        'check_railway.py',
+        'Procfile',
+        'runtime.txt',
+        'nixpacks.toml',
+        'pyvenv.cfg'
+    ]
+
+    for file in files_to_remove:
+        if os.path.exists(file):
+            try:
+                os.remove(file)
+                print(f"  ✅ Удален: {file}")
+            except:
+                print(f"  ❌ Не удалось удалить: {file}")
+
+    return True
+
+
+def update_requirements():
+    """Обновляет requirements.txt"""
+    print("\n📦 Обновление зависимостей...")
+
+    # Упрощенные зависимости
+    requirements = """Flask==2.3.3
+Flask-CORS==4.0.0
+requests==2.31.0
+urllib3==2.0.7
+Werkzeug==2.3.7
+python-dotenv==1.0.0"""
+
+    with open('requirements.txt', 'w') as f:
+        f.write(requirements)
+
+    print("  ✅ requirements.txt обновлен")
+    return True
+
+
+def git_operations():
+    """Выполняет Git операции"""
+    print("\n💾 Git операции...")
+
     try:
-        # Получаем данные из запроса
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data provided"}), 400
+        # Добавляем все файлы
+        subprocess.run(['git', 'add', '.'], check=True)
+        print("  ✅ Файлы добавлены в Git")
 
-        api_key = data.get('api_key')
-        if not api_key:
-            return jsonify({"error": "API key is required"}), 400
+        # Коммит
+        subprocess.run(['git', 'commit', '-m', 'Prepare for Hugging Face Spaces deployment'], check=True)
+        print("  ✅ Коммит создан")
 
-        print(f"Получен запрос на получение токена с API ключем: {api_key[:20]}...")
-
-        # Заголовки для запроса к GigaChat
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json",
-            "RqUID": "87d5de19-0c14-4223-b7c2-ccea3182470a",
-            "Authorization": f"Basic {api_key}"
-        }
-
-        payload = {"scope": "GIGACHAT_API_PERS"}
-
-        # Отправляем запрос к GigaChat API
-        print(f"Отправляем запрос к {OAUTH_URL}")
-        response = requests.post(
-            OAUTH_URL,
-            headers=headers,
-            data=payload,
-            verify=False,  # Отключаем проверку SSL для разработки
-            timeout=30
-        )
-
-        # Проверяем ответ
-        response.raise_for_status()
-        result = response.json()
-
-        print(f"Токен успешно получен: {result.get('access_token')[:20]}...")
-
-        return jsonify({
-            "access_token": result.get("access_token"),
-            "expires_at": result.get("expires_at"),
-            "token_type": result.get("token_type", "Bearer")
-        })
-
-    except requests.exceptions.RequestException as e:
-        error_msg = f"Ошибка при запросе к API: {str(e)}"
-        print(f"ERROR: {error_msg}")
-        if hasattr(e, 'response') and e.response:
-            print(f"Response status: {e.response.status_code}")
-            print(f"Response text: {e.response.text}")
-        return jsonify({"error": error_msg}), 500
-    except Exception as e:
-        error_msg = f"Неожиданная ошибка: {str(e)}"
-        print(f"ERROR: {error_msg}")
-        return jsonify({"error": error_msg}), 500
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ Ошибка Git: {e}")
+        return False
 
 
-@app.route('/api/files', methods=['POST'])
-def upload_file():
-    """Загрузка файла на сервер GigaChat"""
-    try:
-        print("=" * 60)
-        print("DEBUG: Начало загрузки файла в GigaChat")
+def main():
+    print("🚀 ПОДГОТОВКА К HUGGING FACE SPACES")
+    print("=" * 50)
 
-        # Проверяем заголовок авторизации
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            print("ERROR: Отсутствует заголовок Authorization")
-            return jsonify({"error": "Authorization header is required"}), 401
+    # Выполняем шаги
+    steps = [
+        ("Структура проекта", create_structure),
+        ("Проверка файлов", check_files),
+        ("Очистка", clean_unnecessary),
+        ("Зависимости", update_requirements),
+    ]
 
-        print(f"DEBUG: Токен получен: {auth_header[:50]}...")
+    all_ok = True
+    for step_name, step_func in steps:
+        print(f"\n📝 {step_name}:")
+        if not step_func():
+            all_ok = False
 
-        # Проверяем наличие файла
-        if 'file' not in request.files:
-            print("ERROR: В запросе нет файла")
-            return jsonify({"error": "No file part in request"}), 400
-
-        file = request.files['file']
-
-        if file.filename == '':
-            print("ERROR: Файл не выбран")
-            return jsonify({"error": "No file selected"}), 400
-
-        if not allowed_file(file.filename):
-            print(f"ERROR: Неподдерживаемый формат файла: {file.filename}")
-            return jsonify({"error": "Only PDF files are allowed"}), 400
-
-        print(f"DEBUG: Загружаемый файл: {file.filename}, размер: {file.content_length} байт")
-
-        # Сохраняем файл временно
-        filename = secure_filename(file.filename)
-        temp_filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(temp_filepath)
-
-        print(f"DEBUG: Файл сохранен временно: {temp_filepath} ({os.path.getsize(temp_filepath)} bytes)")
-
-        try:
-            # Подготавливаем запрос к GigaChat API
-            headers = {
-                "Accept": "application/json",
-                "Authorization": auth_header
-            }
-
-            # Открываем файл для отправки
-            with open(temp_filepath, 'rb') as f:
-                files = {
-                    "file": (filename, f, "application/pdf"),
-                    "purpose": (None, "general")
-                }
-
-                print(f"DEBUG: Отправляем файл в GigaChat API...")
-                print(f"DEBUG: URL: {UPLOAD_URL}")
-
-                response = requests.post(
-                    UPLOAD_URL,
-                    headers=headers,
-                    files=files,
-                    verify=False,
-                    timeout=60
-                )
-
-            print(f"DEBUG: Статус ответа GigaChat: {response.status_code}")
-            print(f"DEBUG: Ответ GigaChat: {response.text[:200]}...")
-
-            response.raise_for_status()
-            result = response.json()
-
-            print(f"DEBUG: Файл успешно загружен в GigaChat. ID файла: {result.get('id')}")
-
-            # Удаляем временный файл
-            if os.path.exists(temp_filepath):
-                os.remove(temp_filepath)
-
-            return jsonify({
-                "id": result.get("id"),
-                "filename": filename,
-                "object": result.get("object", "file"),
-                "bytes": result.get("bytes", 0),
-                "status": "uploaded"
-            })
-
-        except requests.exceptions.RequestException as e:
-            print(f"ERROR: Ошибка при запросе к GigaChat: {str(e)}")
-            if hasattr(e, 'response') and e.response:
-                print(f"ERROR: Response status: {e.response.status_code}")
-                print(f"ERROR: Response text: {e.response.text[:500]}")
-            raise e
-
-    except Exception as e:
-        print(f"ERROR: Неожиданная ошибка при загрузке файла: {str(e)}")
-        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
-
-
-
-@app.route('/api/chat/completions', methods=['POST'])
-def chat_completions():
-    """Запрос к GigaChat API для извлечения данных из таблицы"""
-    try:
-        # Получаем данные из запроса
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data provided"}), 400
-
-        print("=" * 60)
-        print("DEBUG: Получен запрос к chat/completions")
-        print(f"DEBUG: Данные запроса: {json.dumps(data, ensure_ascii=False)[:500]}")
-
-        # Проверяем наличие attachments
-        messages = data.get('messages', [])
-        if messages:
-            first_message = messages[0]
-            attachments = first_message.get('attachments', [])
-            print(f"DEBUG: Прикрепленные файлы (attachments): {attachments}")
-
-        # Проверяем заголовок авторизации
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({"error": "Authorization header is required"}), 401
-
-        # Подготавливаем заголовки для GigaChat API
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Authorization": auth_header
-        }
-
-        # Отправляем запрос к GigaChat API
-        print(f"DEBUG: Отправляем запрос к {GIGACHAT_URL}")
-        response = requests.post(
-            GIGACHAT_URL,
-            headers=headers,
-            json=data,
-            verify=False,
-            timeout=120
-        )
-
-        response.raise_for_status()
-        result = response.json()
-
-        print(
-            f"DEBUG: Получен ответ от GigaChat. Количество токенов: {result.get('usage', {}).get('total_tokens', 'unknown')}")
-        print(f"DEBUG: Ответ: {json.dumps(result, ensure_ascii=False)[:500]}...")
-        print("=" * 60)
-
-        return jsonify(result)
-
-    except requests.exceptions.RequestException as e:
-        error_msg = f"Ошибка при запросе к GigaChat API: {str(e)}"
-        print(f"ERROR: {error_msg}")
-        if hasattr(e, 'response') and e.response:
-            print(f"ERROR: Response status: {e.response.status_code}")
-            print(f"ERROR: Response text: {e.response.text[:500]}")
-        return jsonify({"error": error_msg}), 500
-    except Exception as e:
-        error_msg = f"Неожиданная ошибка: {str(e)}"
-        print(f"ERROR: {error_msg}")
-        return jsonify({"error": error_msg}), 500
-
-
-@app.route('/test', methods=['GET'])
-def test_api():
-    """Тестовый endpoint для проверки работы сервера"""
-    return jsonify({
-        "status": "ok",
-        "message": "Сервер работает корректно",
-        "endpoints": {
-            "GET /": "Главная страница",
-            "POST /api/oauth": "Получение токена доступа",
-            "POST /api/files": "Загрузка файла в GigaChat",
-            "POST /api/chat/completions": "Запрос к GigaChat API"
-        }
-    })
-
-
-# Для разработки - обслуживаем статические файлы из корня
-@app.route('/<path:filename>')
-def serve_static(filename):
-    if filename.endswith('.css'):
-        return send_from_directory('static', filename)
-    elif filename.endswith('.js'):
-        return send_from_directory('static', filename)
-    elif filename.endswith('.html'):
-        return send_from_directory('templates', filename)
-    return jsonify({"error": "File not found"}), 404
+    if all_ok:
+        print("\n" + "=" * 50)
+        print("✅ Проект готов к деплою на Hugging Face!")
+        print("\n🎯 Следующие шаги:")
+        print("1. Откройте https://huggingface.co/spaces")
+        print("2. Нажмите 'Create new Space'")
+        print("3. Выберите:")
+        print("   - Name: pdf-table-extractor")
+        print("   - SDK: Docker")
+        print("   - Visibility: Public")
+        print("4. Нажмите 'Create Space'")
+        print("5. Загрузите файлы или свяжите с GitHub")
+    else:
+        print("\n❌ Есть проблемы, которые нужно исправить")
 
 
 if __name__ == '__main__':
-    # Создаем необходимые папки
-    os.makedirs('static', exist_ok=True)
-    os.makedirs('templates', exist_ok=True)
-    os.makedirs('uploads', exist_ok=True)
-
-    print("=" * 60)
-    print("PDF Table Extractor Server")
-    print("=" * 60)
-    print("Сервер запущен!")
-    print(f"Откройте в браузере: http://localhost:5000")
-    print(f"Для проверки API: http://localhost:5000/test")
-    print("=" * 60)
-
-    # Запускаем сервер
-    app.run(
-        debug=True,
-        host='0.0.0.0',
-        port=5000,
-        threaded=True
-    )
-
-
-if __name__ == '__main__':
-    # Создаем необходимые папки
-    os.makedirs('static', exist_ok=True)
-    os.makedirs('templates', exist_ok=True)
-    os.makedirs('uploads', exist_ok=True)
-
-    print("=" * 60)
-    print("PDF Table Extractor Server")
-    print("=" * 60)
-    print(f"Сервер запущен на порту {PORT}")
-    print("=" * 60)
-
-    # Запускаем сервер
-    app.run(
-        host='0.0.0.0',
-        port=PORT,
-        debug=False  # В продакшне debug должен быть False!
-    )
+    main()
