@@ -1,13 +1,3 @@
-﻿---
-title: PDF Table Extractor
-emoji: 📊
-colorFrom: blue
-colorTo: purple
-sdk: docker
-app_file: app.py
-pinned: false
----
-
 # PDF Table Extractor
 
 Flask веб-приложение для извлечения табличных данных из PDF файлов с использованием GigaChat API.
