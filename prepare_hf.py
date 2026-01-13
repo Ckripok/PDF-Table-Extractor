@@ -10,21 +10,20 @@ import subprocess
 
 def create_structure():
     """Создает правильную структуру проекта"""
-    print("📁 Создание структуры проекта...")
-
+    print(" Создание структуры проекта...")
     # Создаем папки если их нет
     folders = ['static', 'templates']
     for folder in folders:
         if not os.path.exists(folder):
             os.makedirs(folder)
-            print(f"  ✅ Создана папка: {folder}")
+            print(f"   Создана папка: {folder}")
         else:
-            print(f"  ✅ Папка уже существует: {folder}")
+            print(f"   Папка уже существует: {folder}")
 
     # Проверяем наличие script.js в static/
     if os.path.exists('script.js'):
         shutil.move('script.js', 'static/script.js')
-        print("  ✅ script.js перемещен в static/")
+        print("   script.js перемещен в static/")
 
     return True
 
@@ -38,13 +37,13 @@ def check_files():
 
     for file in required_files:
         if os.path.exists(file):
-            print(f"  ✅ {file}")
+            print(f" {file}")
         else:
-            print(f"  ❌ {file} - ОТСУТСТВУЕТ!")
+            print(f" {file} - ОТСУТСТВУЕТ!")
             missing_files.append(file)
 
     if missing_files:
-        print(f"\n⚠️  Не хватает файлов: {missing_files}")
+        print(f"\n  Не хватает файлов: {missing_files}")
         return False
 
     return True
@@ -52,7 +51,7 @@ def check_files():
 
 def clean_unnecessary():
     """Удаляет ненужные файлы для HF"""
-    print("\n🗑️  Очистка ненужных файлов...")
+    print("\n🗑 Очистка ненужных файлов...")
 
     files_to_remove = [
         'railway.json',
@@ -67,16 +66,16 @@ def clean_unnecessary():
         if os.path.exists(file):
             try:
                 os.remove(file)
-                print(f"  ✅ Удален: {file}")
+                print(f" Удален: {file}")
             except:
-                print(f"  ❌ Не удалось удалить: {file}")
+                print(f"Не удалось удалить: {file}")
 
     return True
 
 
 def update_requirements():
     """Обновляет requirements.txt"""
-    print("\n📦 Обновление зависимостей...")
+    print("\n Обновление зависимостей...")
 
     # Упрощенные зависимости
     requirements = """Flask==2.3.3
@@ -100,20 +99,20 @@ def git_operations():
     try:
         # Добавляем все файлы
         subprocess.run(['git', 'add', '.'], check=True)
-        print("  ✅ Файлы добавлены в Git")
+        print("  Файлы добавлены в Git")
 
         # Коммит
         subprocess.run(['git', 'commit', '-m', 'Prepare for Hugging Face Spaces deployment'], check=True)
-        print("  ✅ Коммит создан")
+        print("  Коммит создан")
 
         return True
     except subprocess.CalledProcessError as e:
-        print(f"  ❌ Ошибка Git: {e}")
+        print(f" Ошибка Git: {e}")
         return False
 
 
 def main():
-    print("🚀 ПОДГОТОВКА К HUGGING FACE SPACES")
+    print(" ПОДГОТОВКА К HUGGING FACE SPACES")
     print("=" * 50)
 
     # Выполняем шаги
@@ -126,14 +125,14 @@ def main():
 
     all_ok = True
     for step_name, step_func in steps:
-        print(f"\n📝 {step_name}:")
+        print(f"\n {step_name}:")
         if not step_func():
             all_ok = False
 
     if all_ok:
         print("\n" + "=" * 50)
-        print("✅ Проект готов к деплою на Hugging Face!")
-        print("\n🎯 Следующие шаги:")
+        print("Проект готов к деплою на Hugging Face!")
+        print("\nСледующие шаги:")
         print("1. Откройте https://huggingface.co/spaces")
         print("2. Нажмите 'Create new Space'")
         print("3. Выберите:")
@@ -143,7 +142,7 @@ def main():
         print("4. Нажмите 'Create Space'")
         print("5. Загрузите файлы или свяжите с GitHub")
     else:
-        print("\n❌ Есть проблемы, которые нужно исправить")
+        print("\nЕсть проблемы, которые нужно исправить")
 
 
 if __name__ == '__main__':

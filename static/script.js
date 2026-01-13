@@ -67,6 +67,9 @@ function init() {
         setupEventListeners();
     }
     loadSavedSettings();
+
+    // Инициализируем dropdown экспорта
+    setTimeout(setupExportDropdown, 100);
 }
 
 function setupEventListeners() {
@@ -90,6 +93,16 @@ function setupEventListeners() {
             handleFile(e.dataTransfer.files[0]);
         }
     });
+
+    if (document.getElementById('exportTableBtn')) {
+    document.getElementById('exportTableBtn').addEventListener('click', function() {
+        // Показываем dropdown экспорта
+        const dropdown = document.getElementById('exportDropdown');
+        if (dropdown) {
+            dropdown.classList.toggle('show');
+        }
+    });
+    }
 
     elements.uploadArea.addEventListener('click', () => elements.pdfFileInput.click());
     elements.removeFileBtn.addEventListener('click', removeFile);
@@ -430,6 +443,8 @@ async function processPDF() {
         // Включаем кнопки
         elements.downloadBtn.disabled = false;
 
+        updateExportButtons();
+
         updateProgress(100, 'Готово!');
 
         // Переключаемся на JSON вид
@@ -526,8 +541,8 @@ async function askGigaChat(token, fileId) {
     const expectedRows = parseInt(elements.expectedRowsInput?.value) || 30;
     const expectedColumns = 24; // Как в Python коде
 
-    const prompt = `ВНИМАТЕЛЬНО прочитай таблицу из PDF и верни её строго в формате JSON.
-
+    const prompt = `ВНИМАТЕЛЬНО ПРОСМОТРИ таблицу из PDF и верни её строго в формате JSON.
+ВАЖНО ЧТОБЫ ТЫ ЕЕ ПРОСМОТРЕЛ, ПРОАНАЛИЗИРОВАЛ КАК КАРТИНКУ. СЧИТЫВАНИЕ PDF МОЖЕТ БЫТЬ НЕ КОРРЕКТНЫМ.
 ВАЖНО: В таблице должно быть ${expectedColumns} колонок (столбцов)!
 Проверь внимательно - если видишь меньше колонок, значит ты пропустил часть данных.
 
@@ -757,6 +772,7 @@ function displayJSON(jsonStr) {
         // Сохраняем данные для скачивания
         jsonData = JSON.stringify(jsonObj);
 
+
     } catch (error) {
         console.error('Критическая ошибка при отображении JSON:', error);
         console.error('Исходный текст (первые 500 символов):', jsonStr.substring(0, 500));
@@ -771,6 +787,7 @@ function displayJSON(jsonStr) {
         elements.toggleViewBtn.disabled = true;
         elements.copyJsonBtn.disabled = true;
         elements.downloadBtn.disabled = false; // все равно можно скачать сырой текст
+        updateExportButtons(); // <-- Добавьте эту строку
     }
 }
 
@@ -2160,7 +2177,7 @@ function countVisibleColumns() {
 }
 
 function showNotification(message, type = 'info') {
-    const container = document.getElementById('notificationContainer');
+    let container = document.getElementById('notificationContainer');
     if (!container) {
         // Создаем контейнер, если его нет
         const newContainer = document.createElement('div');
@@ -2712,6 +2729,10 @@ function clearResults() {
 
     // Скрываем таблицу, показываем JSON
     showView('json');
+
+    if (document.getElementById('exportDropdownBtn')) {
+        document.getElementById('exportDropdownBtn').disabled = true;
+    }
 
     // Очищаем валидационное сообщение
     if (elements.validationAlert) {
@@ -4084,7 +4105,7 @@ function saveChanges() {
             saveBtn.innerHTML = '<i class="fas fa-save"></i> Сохранить';
         }, 2000);
     }
-
+    updateExportButtons();
     showNotification('Изменения сохранены', 'success');
 }
 
@@ -4804,3 +4825,1101 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Запуск приложения
 document.addEventListener('DOMContentLoaded', init);
+
+// Функции экспорта таблицы
+function setupExportDropdown() {
+    const exportBtn = document.getElementById('exportDropdownBtn');
+    const dropdown = document.getElementById('exportDropdown');
+
+    if (!exportBtn || !dropdown) return;
+
+    // Показываем/скрываем dropdown
+    exportBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        dropdown.classList.toggle('show');
+    });
+
+    // Закрываем dropdown при клике вне его
+    document.addEventListener('click', function(e) {
+        if (!dropdown.contains(e.target) && !exportBtn.contains(e.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+
+    // Обработчики для кнопок экспорта
+    document.getElementById('exportExcelBtn')?.addEventListener('click', exportToExcel);
+    document.getElementById('exportPdfBtn')?.addEventListener('click', exportToPDF);
+    document.getElementById('exportCsvBtn')?.addEventListener('click', exportToCSV);
+    document.getElementById('exportJsonBtn')?.addEventListener('click', exportToJSON);
+}
+
+function exportToExcel() {
+    try {
+        const data = JSON.parse(jsonData);
+        if (!data.table_data || !Array.isArray(data.table_data) || data.table_data.length === 0) {
+            throw new Error('Нет табличных данных для экспорта');
+        }
+
+        // Создаем новую книгу Excel
+        const wb = XLSX.utils.book_new();
+
+        // Подготавливаем данные
+        const wsData = [];
+
+        // Заголовки
+        const headers = ['Characteristic'];
+        const firstRow = data.table_data[0];
+
+        // Получаем все колонки кроме characteristic
+        const columns = Object.keys(firstRow || {}).filter(key => key !== 'characteristic');
+
+        // Сортируем колонки по номеру
+        columns.sort((a, b) => {
+            const numA = parseInt(a.replace('column_', '')) || 0;
+            const numB = parseInt(b.replace('column_', '')) || 0;
+            return numA - numB;
+        });
+
+        headers.push(...columns);
+        wsData.push(headers);
+
+        // Данные
+        data.table_data.forEach(row => {
+            const rowData = [row.characteristic || ''];
+            columns.forEach(col => {
+                rowData.push(row[col] || '');
+            });
+            wsData.push(rowData);
+        });
+
+        // Создаем worksheet
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Настраиваем ширину колонок
+        const colWidths = headers.map((header, index) => {
+            let maxLength = header.length;
+            data.table_data.forEach(row => {
+                const cellValue = index === 0
+                    ? String(row.characteristic || '')
+                    : String(row[columns[index-1]] || '');
+                maxLength = Math.max(maxLength, cellValue.length);
+            });
+            return { wch: Math.min(Math.max(maxLength, 10), 50) };
+        });
+        ws['!cols'] = colWidths;
+
+        // Добавляем стили (если нужно)
+        // Для более продвинутого форматирования можно использовать xlsx-style
+
+        // Добавляем worksheet в книгу
+        XLSX.utils.book_append_sheet(wb, ws, 'Table Data');
+
+        // Генерируем файл
+        const fileName = `table_export_${new Date().toISOString().slice(0,10)}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+
+        showNotification('Таблица экспортирована в Excel', 'success');
+
+    } catch (error) {
+        console.error('Ошибка при экспорте в Excel:', error);
+        showNotification('Ошибка экспорта: ' + error.message, 'error');
+    }
+}
+
+function exportToPDF() {
+    try {
+        const data = JSON.parse(jsonData);
+        if (!data.table_data || !Array.isArray(data.table_data) || data.table_data.length === 0) {
+            throw new Error('Нет данных для экспорта');
+        }
+
+        // Импортируем jsPDF
+        const { jsPDF } = window.jspdf;
+
+        // Создаем PDF с поддержкой кириллицы
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        // Добавляем поддержку кириллицы (стандартный шрифт поддерживает русские буквы)
+        pdf.setFont("helvetica");
+
+        const pageWidth = pdf.internal.pageSize.width;
+        const pageHeight = pdf.internal.pageSize.height;
+        const margin = 10;
+        let y = margin;
+
+        // Заголовок - используем английский или простой текст
+        pdf.setFontSize(16);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("TABLE EXPORT", pageWidth / 2, y, { align: "center" });
+        y += 8;
+
+        // Информация на английском
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        const exportDate = new Date().toLocaleDateString('en-GB');
+        pdf.text(`Export date: ${exportDate}`, margin, y);
+        pdf.text(`Total rows: ${data.table_data.length}`, pageWidth - margin, y, { align: "right" });
+        y += 10;
+
+        // Получаем все колонки из данных
+        const allColumns = new Set();
+        data.table_data.forEach(row => {
+            Object.keys(row).forEach(key => {
+                if (key !== 'characteristic') {
+                    allColumns.add(key);
+                }
+            });
+        });
+
+        // Сортируем колонки по номеру
+        const sortedColumns = Array.from(allColumns).sort((a, b) => {
+            const numA = parseInt(a.replace('column_', '')) || 0;
+            const numB = parseInt(b.replace('column_', '')) || 0;
+            return numA - numB;
+        });
+
+        // Ограничиваем количество колонок для читаемости
+        const maxColumns = Math.min(sortedColumns.length, 15);
+        const displayColumns = sortedColumns.slice(0, maxColumns);
+
+        // Рассчитываем ширину колонок
+        const tableWidth = pageWidth - (2 * margin);
+        const charColWidth = 35; // Ширина для характеристики
+        const dataColWidth = (tableWidth - charColWidth - 10) / Math.max(displayColumns.length, 1);
+
+        // Заголовки таблицы (на английском)
+        const headers = ['#', 'Characteristic', ...displayColumns.map(col =>
+            `Col ${col.replace('column_', '')}`
+        )];
+
+        // Подготавливаем данные
+        const tableData = [];
+        const maxRows = Math.min(data.table_data.length, 100);
+
+        for (let i = 0; i < maxRows; i++) {
+            const row = data.table_data[i];
+            const rowData = [
+                (i + 1).toString(),
+                row.characteristic || '',
+                ...displayColumns.map(col => row[col] || '')
+            ];
+            tableData.push(rowData);
+        }
+
+        // Стили для заголовков
+        pdf.setFillColor(44, 62, 80); // Темно-синий
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "bold");
+
+        // Рисуем заголовки таблицы
+        let x = margin;
+        const headerHeight = 6;
+
+        // Номер
+        pdf.rect(x, y, 10, headerHeight, 'F');
+        pdf.text('#', x + 3, y + 4);
+        x += 10;
+
+        // Характеристика
+        pdf.rect(x, y, charColWidth, headerHeight, 'F');
+        pdf.text('Characteristic', x + 2, y + 4);
+        x += charColWidth;
+
+        // Колонки
+        displayColumns.forEach((col, index) => {
+            pdf.rect(x, y, dataColWidth, headerHeight, 'F');
+            const colNum = col.replace('column_', '');
+            pdf.text(colNum, x + dataColWidth/2, y + 4, { align: 'center' });
+            x += dataColWidth;
+        });
+
+        y += headerHeight;
+
+        // Рисуем данные
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(7);
+        pdf.setTextColor(0, 0, 0);
+
+        const rowHeight = 5;
+
+        tableData.forEach((row, rowIndex) => {
+            // Проверяем, нужна ли новая страница
+            if (y + rowHeight > pageHeight - margin - 10) {
+                pdf.addPage();
+                y = margin;
+
+                // Рисуем заголовки на новой странице
+                x = margin;
+                pdf.setFillColor(44, 62, 80);
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFont("helvetica", "bold");
+
+                // Номер
+                pdf.rect(x, y, 10, headerHeight, 'F');
+                pdf.text('#', x + 3, y + 4);
+                x += 10;
+
+                // Характеристика
+                pdf.rect(x, y, charColWidth, headerHeight, 'F');
+                pdf.text('Characteristic', x + 2, y + 4);
+                x += charColWidth;
+
+                // Колонки
+                displayColumns.forEach((col, index) => {
+                    pdf.rect(x, y, dataColWidth, headerHeight, 'F');
+                    const colNum = col.replace('column_', '');
+                    pdf.text(colNum, x + dataColWidth/2, y + 4, { align: 'center' });
+                    x += dataColWidth;
+                });
+
+                y += headerHeight;
+
+                // Возвращаем стили для данных
+                pdf.setFont("helvetica", "normal");
+                pdf.setTextColor(0, 0, 0);
+            }
+
+            // Рисуем строку
+            x = margin;
+
+            // Чередующийся цвет фона
+            if (rowIndex % 2 === 0) {
+                pdf.setFillColor(248, 249, 250); // Светло-серый
+                let fillX = margin;
+
+                // Номер
+                pdf.rect(fillX, y, 10, rowHeight, 'F');
+                fillX += 10;
+
+                // Характеристика
+                pdf.rect(fillX, y, charColWidth, rowHeight, 'F');
+                fillX += charColWidth;
+
+                // Колонки
+                displayColumns.forEach(() => {
+                    pdf.rect(fillX, y, dataColWidth, rowHeight, 'F');
+                    fillX += dataColWidth;
+                });
+            }
+
+            // Номер строки
+            pdf.text(row[0], x + 3, y + 3.5, { align: 'center' });
+            x += 10;
+
+            // Характеристика (обрезаем если слишком длинная)
+            const characteristic = row[1] || '';
+            const maxCharLength = 30;
+            const displayChar = characteristic.length > maxCharLength
+                ? characteristic.substring(0, maxCharLength - 3) + '...'
+                : characteristic;
+            pdf.text(displayChar, x + 2, y + 3.5);
+            x += charColWidth;
+
+            // Значения колонок
+            row.slice(2).forEach((cell, cellIndex) => {
+                const cellValue = String(cell || '');
+
+                // Устанавливаем цвет в зависимости от значения
+                if (cellValue === '+') {
+                    pdf.setTextColor(16, 185, 129); // Green
+                } else if (cellValue === '-') {
+                    pdf.setTextColor(239, 68, 68); // Red
+                } else if (cellValue === '?') {
+                    pdf.setTextColor(245, 158, 11); // Orange
+                } else if (cellValue.toUpperCase() === 'W') {
+                    pdf.setTextColor(139, 92, 246); // Purple
+                } else if (cellValue.toUpperCase() === 'ND') {
+                    pdf.setTextColor(156, 163, 175); // Gray
+                } else {
+                    pdf.setTextColor(0, 0, 0); // Black
+                }
+
+                // Центрируем текст
+                pdf.text(cellValue, x + dataColWidth/2, y + 3.5, { align: 'center' });
+                x += dataColWidth;
+
+                // Сбрасываем цвет
+                pdf.setTextColor(0, 0, 0);
+            });
+
+            y += rowHeight;
+        });
+
+        // Легенда на английском
+        y = pageHeight - margin - 10;
+        pdf.setFontSize(7);
+        pdf.setTextColor(102, 102, 102);
+        pdf.text("Legend: + (positive)  - (negative)  ? (unknown)  W (weak positive)  ND (no data)",
+            margin, y);
+
+        // Номер страницы
+        pdf.text("Page 1", pageWidth - margin, pageHeight - margin, { align: "right" });
+
+        // Сохраняем PDF
+        const fileName = `table_export_${new Date().toISOString().slice(0, 10)}.pdf`;
+        pdf.save(fileName);
+
+        showNotification('PDF successfully created', 'success');
+
+    } catch (error) {
+        console.error('Error creating PDF:', error);
+        showNotification('Error: ' + error.message, 'error');
+    }
+}
+
+// Функция для рисования таблицы
+function drawTable(pdf, tableData, headers, options) {
+    const {
+        startX,
+        startY,
+        tableWidth,
+        charColWidth,
+        dataColWidth,
+        headerStyle,
+        cellStyle,
+        margin,
+        pageHeight
+    } = options;
+
+    const colCount = headers.length;
+    const rowHeight = 6;
+    let x = startX;
+    let y = startY;
+    let currentPage = 1;
+
+    // Рисуем заголовки
+    pdf.setFillColor(...headerStyle.fillColor);
+    pdf.setTextColor(...headerStyle.textColor);
+    pdf.setFont("helvetica", headerStyle.fontStyle);
+    pdf.setFontSize(headerStyle.fontSize);
+
+    headers.forEach((header, colIndex) => {
+        // Рассчитываем ширину колонки
+        let colWidth;
+        if (colIndex === 0) {
+            colWidth = 8; // Для номера
+        } else if (colIndex === 1) {
+            colWidth = charColWidth; // Для характеристики
+        } else {
+            colWidth = dataColWidth; // Для остальных колонок
+        }
+
+        // Рисуем ячейку заголовка
+        pdf.rect(x, y, colWidth, rowHeight, 'F');
+
+        // Текст заголовка
+        const text = colIndex === 0 ? '№' :
+                    colIndex === 1 ? 'Characteristic' :
+                    header;
+
+        const maxTextWidth = colWidth - 4; // Минус отступы
+        const textWidth = pdf.getTextWidth(text);
+        let displayText = text;
+
+        if (textWidth > maxTextWidth) {
+            // Укорачиваем текст если не помещается
+            for (let i = text.length - 1; i > 0; i--) {
+                const shortText = text.substring(0, i) + '...';
+                if (pdf.getTextWidth(shortText) <= maxTextWidth) {
+                    displayText = shortText;
+                    break;
+                }
+            }
+        }
+
+        pdf.text(displayText, x + 2, y + rowHeight - 2);
+        x += colWidth;
+    });
+
+    y += rowHeight;
+
+    // Рисуем данные
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(cellStyle.fontSize);
+    pdf.setTextColor(...cellStyle.textColor);
+
+    tableData.forEach((row, rowIndex) => {
+        // Проверяем, нужна ли новая страница
+        if (y + rowHeight > pageHeight - margin - 10) {
+            pdf.addPage();
+            currentPage++;
+            y = margin;
+
+            // Повторяем заголовки на новой странице
+            x = startX;
+            pdf.setFillColor(...headerStyle.fillColor);
+            pdf.setTextColor(...headerStyle.textColor);
+            pdf.setFont("helvetica", headerStyle.fontStyle);
+            pdf.setFontSize(headerStyle.fontSize);
+
+            headers.forEach((header, colIndex) => {
+                let colWidth;
+                if (colIndex === 0) {
+                    colWidth = 8;
+                } else if (colIndex === 1) {
+                    colWidth = charColWidth;
+                } else {
+                    colWidth = dataColWidth;
+                }
+
+                pdf.rect(x, y, colWidth, rowHeight, 'F');
+
+                const text = colIndex === 0 ? '№' :
+                            colIndex === 1 ? 'Characteristic' :
+                            header;
+
+                const maxTextWidth = colWidth - 4;
+                const textWidth = pdf.getTextWidth(text);
+                let displayText = text;
+
+                if (textWidth > maxTextWidth) {
+                    for (let i = text.length - 1; i > 0; i--) {
+                        const shortText = text.substring(0, i) + '...';
+                        if (pdf.getTextWidth(shortText) <= maxTextWidth) {
+                            displayText = shortText;
+                            break;
+                        }
+                    }
+                }
+
+                pdf.text(displayText, x + 2, y + rowHeight - 2);
+                x += colWidth;
+            });
+
+            y += rowHeight;
+        }
+
+        // Рисуем строку данных
+        x = startX;
+
+        row.forEach((cell, colIndex) => {
+            // Рассчитываем ширину колонки
+            let colWidth;
+            if (colIndex === 0) {
+                colWidth = 8;
+            } else if (colIndex === 1) {
+                colWidth = charColWidth;
+            } else {
+                colWidth = dataColWidth;
+            }
+
+            // Чередуем цвет фона строк
+            if (rowIndex % 2 === 0) {
+                pdf.setFillColor(248, 249, 250);
+                pdf.rect(x, y, colWidth, rowHeight, 'F');
+            }
+
+            // Рисуем границу
+            pdf.setDrawColor(200, 200, 200);
+            pdf.rect(x, y, colWidth, rowHeight);
+
+            // Устанавливаем цвет текста в зависимости от значения
+            const cellValue = String(cell || '');
+            if (cellValue === '+') {
+                pdf.setTextColor(16, 185, 129); // Зеленый
+            } else if (cellValue === '-') {
+                pdf.setTextColor(239, 68, 68); // Красный
+            } else if (cellValue === '?') {
+                pdf.setTextColor(245, 158, 11); // Оранжевый
+            } else if (cellValue.toUpperCase() === 'W') {
+                pdf.setTextColor(139, 92, 246); // Фиолетовый
+            } else if (cellValue.toUpperCase() === 'ND') {
+                pdf.setTextColor(156, 163, 175); // Серый
+            } else {
+                pdf.setTextColor(0, 0, 0); // Черный
+            }
+
+            // Отображаем текст с переносом
+            const maxTextWidth = colWidth - 4;
+            let displayText = cellValue;
+
+            // Если текст слишком длинный, обрезаем его
+            if (pdf.getTextWidth(cellValue) > maxTextWidth) {
+                for (let i = cellValue.length - 1; i > 0; i--) {
+                    const shortText = cellValue.substring(0, i);
+                    if (pdf.getTextWidth(shortText) <= maxTextWidth) {
+                        displayText = shortText;
+                        break;
+                    }
+                }
+            }
+
+            // Центрируем текст для числовых колонок, левый край для характеристик
+            const textX = colIndex <= 1 ? x + 2 : x + (colWidth / 2);
+            const align = colIndex <= 1 ? 'left' : 'center';
+
+            pdf.text(displayText, textX, y + rowHeight - 2, { align: align });
+
+            x += colWidth;
+        });
+
+        y += rowHeight;
+
+        // Сбрасываем цвет текста
+        pdf.setTextColor(0, 0, 0);
+    });
+
+    // Информация о страницах
+    pdf.setFontSize(7);
+    pdf.setTextColor(102, 102, 102);
+    pdf.text(`Страница ${currentPage}`, margin, pageHeight - margin);
+}
+
+// Альтернативная упрощенная версия для больших таблиц
+function exportToPDFSimple() {
+    try {
+        const data = JSON.parse(jsonData);
+        if (!data.table_data || !Array.isArray(data.table_data) || data.table_data.length === 0) {
+            throw new Error('Нет данных для экспорта');
+        }
+
+        // Используем jsPDF autotable если доступен
+        if (typeof pdf.autoTable !== 'undefined') {
+            exportWithAutoTable(data);
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('l', 'mm', 'a4');
+
+        const margin = 15;
+        let y = margin;
+
+        // Заголовок
+        pdf.setFontSize(18);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("ЭКСПОРТ ТАБЛИЦЫ", 148.5, y, { align: "center" });
+        y += 8;
+
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`Экспортировано: ${new Date().toLocaleString()}`, margin, y);
+        pdf.text(`Строк: ${data.table_data.length}`, 280, y, { align: "right" });
+        y += 15;
+
+        // Получаем колонки
+        const columns = [];
+        const sampleRow = data.table_data[0];
+        Object.keys(sampleRow).forEach(key => {
+            if (key !== 'characteristic') {
+                const colNum = parseInt(key.replace('column_', '')) || 0;
+                columns.push({ key, num: colNum });
+            }
+        });
+
+        columns.sort((a, b) => a.num - b.num);
+        const displayColumns = columns.slice(0, 15); // Ограничиваем 15 колонками
+
+        // Создаем заголовки
+        const headers = ['№', 'Characteristic', ...displayColumns.map(col => `C${col.num}`)];
+
+        // Создаем данные
+        const tableData = [];
+        const maxRows = Math.min(data.table_data.length, 100);
+
+        for (let i = 0; i < maxRows; i++) {
+            const row = data.table_data[i];
+            const rowData = [
+                (i + 1).toString(),
+                row.characteristic || '',
+                ...displayColumns.map(col => row[col.key] || '')
+            ];
+            tableData.push(rowData);
+        }
+
+        // Простая таблица без сложной логики
+        const colWidths = [10, 40, ...Array(displayColumns.length).fill(15)];
+        const rowHeight = 6;
+
+        // Заголовки
+        pdf.setFillColor(44, 62, 80);
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(9);
+
+        let x = margin;
+        headers.forEach((header, i) => {
+            pdf.rect(x, y, colWidths[i], rowHeight, 'F');
+            pdf.text(header.substring(0, 8), x + 2, y + 4);
+            x += colWidths[i];
+        });
+        y += rowHeight;
+
+        // Данные
+        pdf.setFontSize(8);
+        pdf.setTextColor(0, 0, 0);
+
+        tableData.forEach((row, rowIndex) => {
+            if (y > 190) { // Конец страницы
+                pdf.addPage();
+                y = margin;
+
+                // Повторяем заголовки
+                x = margin;
+                pdf.setFillColor(44, 62, 80);
+                pdf.setTextColor(255, 255, 255);
+                headers.forEach((header, i) => {
+                    pdf.rect(x, y, colWidths[i], rowHeight, 'F');
+                    pdf.text(header.substring(0, 8), x + 2, y + 4);
+                    x += colWidths[i];
+                });
+                y += rowHeight;
+
+                pdf.setFontSize(8);
+                pdf.setTextColor(0, 0, 0);
+            }
+
+            // Цвет фона для четных строк
+            if (rowIndex % 2 === 0) {
+                x = margin;
+                pdf.setFillColor(248, 249, 250);
+                colWidths.forEach(width => {
+                    pdf.rect(x, y, width, rowHeight, 'F');
+                    x += width;
+                });
+            }
+
+            // Текст
+            x = margin;
+            row.forEach((cell, cellIndex) => {
+                // Форматирование значений
+                let displayCell = String(cell || '');
+                if (displayCell.length > 8) {
+                    displayCell = displayCell.substring(0, 7) + '...';
+                }
+
+                pdf.text(displayCell,
+                    cellIndex === 1 ? x + 2 : x + colWidths[cellIndex] / 2,
+                    y + 4,
+                    { align: cellIndex === 1 ? 'left' : 'center' }
+                );
+                x += colWidths[cellIndex];
+            });
+
+            y += rowHeight;
+        });
+
+        // Сохраняем
+        pdf.save(`table_${Date.now()}.pdf`);
+        showNotification('PDF успешно создан', 'success');
+
+    } catch (error) {
+        console.error('Ошибка при создании PDF:', error);
+        showNotification('Ошибка: ' + error.message, 'error');
+    }
+}
+
+// Если у вас есть autotable, используйте эту функцию
+function exportWithAutoTable(data) {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('l', 'mm', 'a4');
+
+    // Получаем колонки
+    const columns = [];
+    const sampleRow = data.table_data[0];
+    Object.keys(sampleRow).forEach(key => {
+        if (key !== 'characteristic') {
+            const colNum = parseInt(key.replace('column_', '')) || 0;
+            columns.push({ key, num: colNum, name: `C${colNum}` });
+        }
+    });
+
+    columns.sort((a, b) => a.num - b.num);
+    const displayColumns = columns.slice(0, 20);
+
+    // Заголовки
+    const headers = ['№', 'Characteristic', ...displayColumns.map(col => col.name)];
+
+    // Данные
+    const tableData = [];
+    const maxRows = Math.min(data.table_data.length, 200);
+
+    for (let i = 0; i < maxRows; i++) {
+        const row = data.table_data[i];
+        const rowData = [
+            (i + 1).toString(),
+            row.characteristic || '',
+            ...displayColumns.map(col => row[col.key] || '')
+        ];
+        tableData.push(rowData);
+    }
+
+    // Создаем таблицу
+    pdf.autoTable({
+        head: [headers],
+        body: tableData,
+        startY: 20,
+        theme: 'grid',
+        styles: {
+            fontSize: 7,
+            cellPadding: 2,
+            overflow: 'linebreak',
+            lineColor: [200, 200, 200],
+            lineWidth: 0.1
+        },
+        headStyles: {
+            fillColor: [44, 62, 80],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 8
+        },
+        alternateRowStyles: {
+            fillColor: [248, 249, 250]
+        },
+        columnStyles: {
+            0: { cellWidth: 10, halign: 'center' },
+            1: { cellWidth: 40, halign: 'left' }
+        },
+        margin: { top: 20 },
+        didDrawPage: function(data) {
+            // Заголовок на каждой странице
+            pdf.setFontSize(10);
+            pdf.text(`Страница ${data.pageNumber}`, data.settings.margin.left, 10);
+        }
+    });
+
+    // Сохраняем
+    pdf.save(`table_autotable_${Date.now()}.pdf`);
+    showNotification('PDF с использованием AutoTable создан', 'success');
+}
+
+// Альтернативная функция для создания простого PDF
+function createSimplePDF(data) {
+    try {
+        const pdf = new window.jspdf.jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        // Заголовок
+        pdf.setFontSize(16);
+        pdf.setTextColor(44, 62, 80);
+        pdf.text('Экспорт таблицы', 20, 20);
+
+        pdf.setFontSize(10);
+        pdf.setTextColor(127, 140, 141);
+        pdf.text(`Создано: ${new Date().toLocaleString()}`, 20, 30);
+
+        // Получаем колонки
+        const columns = new Set();
+        data.table_data.forEach(row => {
+            Object.keys(row).forEach(key => {
+                if (key !== 'characteristic') {
+                    columns.add(key);
+                }
+            });
+        });
+
+        const sortedColumns = Array.from(columns).sort((a, b) => {
+            const numA = parseInt(a.replace('column_', '')) || 0;
+            const numB = parseInt(b.replace('column_', '')) || 0;
+            return numA - numB;
+        });
+
+        // Ограничиваем количество колонок для читаемости
+        const displayColumns = sortedColumns.slice(0, 15);
+        const colWidth = 180 / (displayColumns.length + 1); // мм на колонку
+
+        // Заголовки таблицы
+        pdf.setFillColor(44, 62, 80);
+        pdf.setTextColor(255, 255, 255);
+        pdf.rect(20, 40, 180, 8, 'F');
+
+        pdf.setFontSize(9);
+        pdf.text('Characteristic', 22, 46);
+
+        displayColumns.forEach((col, index) => {
+            pdf.text(`Col ${col.replace('column_', '')}`, 22 + (colWidth * (index + 1)), 46);
+        });
+
+        // Данные таблицы (ограничиваем количество строк)
+        const maxRows = Math.min(data.table_data.length, 50);
+        pdf.setFontSize(8);
+        pdf.setTextColor(0, 0, 0);
+
+        for (let i = 0; i < maxRows; i++) {
+            const row = data.table_data[i];
+            const yPos = 50 + (i * 5);
+
+            // Рисуем строку
+            if (i % 2 === 0) {
+                pdf.setFillColor(248, 249, 250);
+                pdf.rect(20, yPos - 4, 180, 5, 'F');
+            }
+
+            // Характеристика
+            const characteristic = row.characteristic || '';
+            pdf.text(characteristic.substring(0, 30), 22, yPos);
+
+            // Значения колонок
+            displayColumns.forEach((col, index) => {
+                const value = row[col] || '';
+                pdf.text(value, 22 + (colWidth * (index + 1)), yPos);
+            });
+        }
+
+        // Информация
+        pdf.setFontSize(8);
+        pdf.setTextColor(102, 102, 102);
+        pdf.text(`Показано ${maxRows} из ${data.table_data.length} строк`, 20, 50 + (maxRows * 5) + 10);
+
+        // Сохраняем PDF
+        const fileName = `table_simple_${new Date().toISOString().slice(0,10)}.pdf`;
+        pdf.save(fileName);
+
+        showNotification('Таблица экспортирована в упрощенный PDF', 'info');
+
+    } catch (error) {
+        console.error('Ошибка при создании простого PDF:', error);
+        showNotification('Не удалось создать PDF файл', 'error');
+    }
+}
+
+function exportToCSV() {
+    try {
+        const data = JSON.parse(jsonData);
+        if (!data.table_data || !Array.isArray(data.table_data)) {
+            throw new Error('Нет табличных данных для экспорта');
+        }
+
+        // Создаем CSV
+        let csv = '';
+
+        // Находим все колонки
+        const allColumns = new Set();
+        data.table_data.forEach(row => {
+            Object.keys(row).forEach(key => {
+                if (key !== 'characteristic') {
+                    allColumns.add(key);
+                }
+            });
+        });
+
+        // Сортируем колонки
+        const sortedColumns = Array.from(allColumns).sort((a, b) => {
+            const numA = parseInt(a.replace('column_', '')) || 0;
+            const numB = parseInt(b.replace('column_', '')) || 0;
+            return numA - numB;
+        });
+
+        // Заголовки
+        const headers = ['Characteristic', ...sortedColumns];
+        csv += headers.map(h => `"${h}"`).join(',') + '\n';
+
+        // Данные
+        data.table_data.forEach(row => {
+            const rowData = [row.characteristic || ''];
+            sortedColumns.forEach(col => {
+                rowData.push(row[col] || '');
+            });
+            csv += rowData.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n';
+        });
+
+        // Создаем и скачиваем файл
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `table_export_${new Date().toISOString().slice(0,10)}.csv`);
+        link.style.visibility = 'hidden';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showNotification('Таблица экспортирована в CSV', 'success');
+
+    } catch (error) {
+        console.error('Ошибка при экспорте в CSV:', error);
+        showNotification('Ошибка экспорта: ' + error.message, 'error');
+    }
+}
+
+function exportToJSON() {
+    try {
+        if (!jsonData) {
+            throw new Error('Нет данных для экспорта');
+        }
+
+        const data = JSON.parse(jsonData);
+        const formattedData = JSON.stringify(data, null, 2);
+
+        const blob = new Blob([formattedData], { type: 'application/json' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `table_export_${new Date().toISOString().slice(0,10)}.json`);
+        link.style.visibility = 'hidden';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showNotification('Таблица экспортирована в JSON', 'success');
+
+    } catch (error) {
+        console.error('Ошибка при экспорте в JSON:', error);
+        showNotification('Ошибка экспорта: ' + error.message, 'error');
+    }
+}
+
+// Улучшенная функция для Excel с форматированием
+function exportToExcelWithFormatting() {
+    try {
+        const data = JSON.parse(jsonData);
+        if (!data.table_data || !Array.isArray(data.table_data)) {
+            throw new Error('Нет табличных данных для экспорта');
+        }
+
+        // Создаем новую книгу
+        const wb = XLSX.utils.book_new();
+
+        // Подготавливаем данные
+        const wsData = [];
+
+        // Заголовки
+        const headers = ['№', 'Characteristic'];
+        const columns = [];
+
+        // Находим все колонки
+        data.table_data.forEach(row => {
+            Object.keys(row).forEach(key => {
+                if (key !== 'characteristic' && !columns.includes(key)) {
+                    columns.push(key);
+                }
+            });
+        });
+
+        // Сортируем колонки
+        columns.sort((a, b) => {
+            const numA = parseInt(a.replace('column_', '')) || 0;
+            const numB = parseInt(b.replace('column_', '')) || 0;
+            return numA - numB;
+        });
+
+        headers.push(...columns);
+        wsData.push(headers);
+
+        // Данные с номерами строк
+        data.table_data.forEach((row, index) => {
+            const rowData = [index + 1, row.characteristic || ''];
+            columns.forEach(col => {
+                rowData.push(row[col] || '');
+            });
+            wsData.push(rowData);
+        });
+
+        // Создаем worksheet
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Автоматическая ширина колонок
+        const colWidths = headers.map((header, idx) => {
+            let maxLength = header.length;
+            wsData.forEach((row, rowIdx) => {
+                if (rowIdx > 0) { // Пропускаем заголовки
+                    const cellValue = String(row[idx] || '');
+                    maxLength = Math.max(maxLength, cellValue.length);
+                }
+            });
+            return { wch: Math.min(Math.max(maxLength + 2, 10), 30) };
+        });
+
+        ws['!cols'] = colWidths;
+
+        // Добавляем фильтры
+        ws['!autofilter'] = { ref: XLSX.utils.encode_range({
+            s: { r: 0, c: 0 },
+            e: { r: wsData.length - 1, c: headers.length - 1 }
+        })};
+
+        // Добавляем закрепление первой строки
+        ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomRight' };
+
+        // Добавляем worksheet в книгу
+        XLSX.utils.book_append_sheet(wb, ws, 'Table Data');
+
+        // Добавляем информационный лист
+        const infoData = [
+            ['Информация об экспорте'],
+            [''],
+            ['Дата экспорта:', new Date().toLocaleString()],
+            ['Количество строк:', data.table_data.length],
+            ['Количество колонок:', columns.length + 1],
+            [''],
+            ['Обозначения:'],
+            ['+', 'Положительный результат'],
+            ['-', 'Отрицательный результат'],
+            ['?', 'Неопределенный результат'],
+            ['W', 'Слабоположительный'],
+            ['ND', 'Нет данных']
+        ];
+
+        const infoWs = XLSX.utils.aoa_to_sheet(infoData);
+        infoWs['!cols'] = [{ wch: 20 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(wb, infoWs, 'Информация');
+
+        // Сохраняем файл
+        const fileName = `table_${new Date().toISOString().slice(0,10)}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+
+        showNotification('Файл Excel успешно создан', 'success');
+
+    } catch (error) {
+        console.error('Ошибка при создании Excel файла:', error);
+        showNotification('Ошибка: ' + error.message, 'error');
+    }
+}
+
+// Функция для включения/выключения кнопок экспорта
+function updateExportButtons() {
+    const exportBtn = document.getElementById('exportDropdownBtn');
+    if (!exportBtn) return;
+
+    // Проверяем, есть ли данные для экспорта
+    const hasData = jsonData && jsonData !== '{"table_data": []}' && jsonData !== '';
+
+    console.log('updateExportButtons вызвана. hasData:', hasData, 'jsonData:', jsonData?.substring(0, 100));
+
+    // Включаем/выключаем кнопку
+    exportBtn.disabled = !hasData;
+
+    // Добавляем визуальную обратную связь
+    if (hasData) {
+        exportBtn.title = 'Экспорт табличных данных';
+        exportBtn.classList.remove('disabled');
+    } else {
+        exportBtn.title = 'Нет данных для экспорта';
+        exportBtn.classList.add('disabled');
+    }
+}
+
+// Обновляем функцию displayJSON для включения кнопок экспорта
+const originalDisplayJSON = displayJSON;
+displayJSON = function(jsonStr) {
+    originalDisplayJSON(jsonStr);
+    updateExportButtons();
+};
+
+function forceEnableExport() {
+    const exportBtn = document.getElementById('exportDropdownBtn');
+    if (exportBtn) {
+        exportBtn.disabled = false;
+        console.log('Кнопка экспорта принудительно включена');
+    }
+}
+
+// Добавьте эту функцию в обработчик клика по кнопке редактирования
+if (document.getElementById('editTableBtn')) {
+    document.getElementById('editTableBtn').addEventListener('click', function() {
+        // Включаем кнопку экспорта при входе в режим редактирования
+        forceEnableExport();
+        toggleEditMode();
+    });
+}

@@ -1,6 +1,6 @@
 ﻿---
 title: PDF Table Extractor
-emoji: 
+emoji: 📊
 colorFrom: blue
 colorTo: purple
 sdk: docker
@@ -28,8 +28,9 @@ Flask веб-приложение для извлечения табличных
 
 ##  Структура проекта
 
-- pp.py - Основное Flask приложение
-- equirements.txt - Python зависимости
+- pp.py - Основное Flask приложение
+- 
+equirements.txt - Python зависимости
 - Dockerfile - Конфигурация Docker контейнера
 - static/ - Статические файлы (CSS, JavaScript)
 - 	emplates/ - HTML шаблоны
