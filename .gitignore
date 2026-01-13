@@ -1,0 +1,41 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+*.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Virtual environment
+Lib/
+Scripts/
+pyvenv.cfg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Логи и БД
+*.log
+*.sqlite3
+*.db
+
+# Папки проекта
+uploads/
+temp/
+test_files/
+
+# PyCharm
+*.iml
+*.ipr
+*.iws

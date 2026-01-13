@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Table Extractor - GigaChat API</title>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-table"></i>
+                <h1>PDF Table Extractor</h1>
+            </div>
+            <p class="subtitle">Извлечение табличных данных из PDF с помощью GigaChat AI</p>
+        </header>
+
+        <main class="main-content">
+            <!-- Левая панель - Загрузка и настройки -->
+            <div class="left-panel">
+                <div class="card">
+                    <h2><i class="fas fa-cloud-upload-alt"></i> Загрузка PDF</h2>
+
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-icon">
+                            <i class="fas fa-file-pdf"></i>
+                        </div>
+                        <h3>Перетащите PDF файл сюда</h3>
+                        <p>или нажмите для выбора файла</p>
+                        <input type="file" id="pdfFile" accept=".pdf" hidden>
+                        <button class="btn btn-outline" id="selectFileBtn">
+                            <i class="fas fa-folder-open"></i> Выбрать файл
+                        </button>
+                        <p class="file-hint">Поддерживаются только PDF файлы (макс. 50 МБ)</p>
+                    </div>
+
+                    <div class="file-info" id="fileInfo" style="display: none;">
+                        <div class="file-card">
+                            <div class="file-icon">
+                                <i class="fas fa-file-pdf"></i>
+                            </div>
+                            <div class="file-details">
+                                <h4 id="fileName">Файл.pdf</h4>
+                                <p id="fileSize">0 KB</p>
+                                <div class="file-progress" id="fileProgress" style="display: none;">
+                                    <div class="progress-bar">
+                                        <div class="progress" id="progressFill"></div>
+                                    </div>
+                                    <span id="progressText">0%</span>
+                                </div>
+                            </div>
+                            <button class="btn-icon btn-danger" id="removeFileBtn" title="Удалить файл">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <div class="card">
+                    <h2><i class="fas fa-key"></i> Настройки API</h2>
+
+                    <div class="form-group">
+                        <label for="apiKey">
+                            <i class="fas fa-lock"></i> API Key GigaChat
+                        </label>
+                        <div class="input-with-button">
+                            <input type="password"
+                                   id="apiKey"
+                                   placeholder="Введите ваш API ключ GigaChat"
+                                   class="form-control">
+                            <button class="btn-icon" id="toggleApiKey" title="Показать/скрыть">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <p class="form-hint">
+                            <i class="fas fa-info-circle"></i>
+                            Получите API ключ на <a href="https://developers.sber.ru" target="_blank">developers.sber.ru</a>
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="accessToken">
+                            <i class="fas fa-ticket-alt"></i> Access Token (опционально)
+                        </label>
+                        <div class="input-with-button">
+                            <input type="text"
+                                   id="accessToken"
+                                   placeholder="Или введите токен напрямую"
+                                   class="form-control">
+                            <button class="btn btn-small" id="getTokenBtn">
+                                <i class="fas fa-sync-alt"></i> Получить токен
+                            </button>
+                        </div>
+                        <p class="form-hint">
+                            <i class="fas fa-clock"></i>
+                            Токен действителен 1 час
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="expectedRows">
+                            <i class="fas fa-list-ol"></i> Ожидаемое количество строк
+                        </label>
+                        <input type="number"
+                               id="expectedRows"
+                               value="30"
+                               min="1"
+                               max="1000"
+                               class="form-control">
+                    </div>
+
+                    <div class="action-buttons">
+                        <button class="btn btn-primary btn-lg" id="processBtn" disabled>
+                            <i class="fas fa-cogs"></i> Извлечь таблицу из PDF
+                        </button>
+                        <button class="btn btn-secondary btn-lg" id="downloadBtn" disabled>
+                            <i class="fas fa-download"></i> Скачать JSON
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card status-card">
+                    <h2><i class="fas fa-info-circle"></i> Статус системы</h2>
+                    <div class="status-items">
+                        <div class="status-item">
+                            <span class="status-label">Сервер:</span>
+                            <span class="status-value status-active" id="serverStatus">
+                                <i class="fas fa-check-circle"></i> Активен
+                            </span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Файл:</span>
+                            <span class="status-value" id="fileStatus">
+                                <i class="fas fa-times-circle"></i> Не выбран
+                            </span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Токен:</span>
+                            <span class="status-value" id="tokenStatus">
+                                <i class="fas fa-times-circle"></i> Не получен
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Правая панель - Результаты -->
+            <div class="right-panel">
+                <div class="card results-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-database"></i> Результаты извлечения</h2>
+                        <div class="card-actions">
+                            <button class="btn btn-small btn-primary" id="editTableBtn">
+                                <i class="fas fa-edit"></i> Редактировать таблицу
+                            </button>
+                            <div class="dropdown">
+                                <button class="btn btn-small btn-success dropdown-toggle" id="exportDropdownBtn" disabled>
+                                    <i class="fas fa-download"></i> Экспорт
+                                </button>
+                                <div class="dropdown-menu" id="exportDropdown">
+                                    <a class="dropdown-item" href="#" id="exportExcelBtn">
+                                        <i class="fas fa-file-excel"></i> Excel (XLSX)
+                                    </a>
+                                    <a class="dropdown-item" href="#" id="exportPdfBtn">
+                                        <i class="fas fa-file-pdf"></i> PDF
+                                    </a>
+                                    <a class="dropdown-item" href="#" id="exportCsvBtn">
+                                        <i class="fas fa-file-csv"></i> CSV
+                                    </a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="#" id="exportJsonBtn">
+                                        <i class="fas fa-file-code"></i> JSON
+                                    </a>
+                                </div>
+                            </div>
+                            <button class="btn btn-small btn-outline" id="copyJsonBtn" disabled>
+                                <i class="fas fa-copy"></i> Копировать JSON
+                            </button>
+                            <button class="btn btn-small btn-outline" id="showRawBtn" style="display: none;">
+                                <i class="fas fa-eye"></i> Показать сырой ответ
+                            </button>
+                            <button class="btn btn-small btn-outline" id="toggleViewBtn" data-view="table" disabled>
+                                <i class="fas fa-table"></i> Таблица
+                            </button>
+                            <button class="btn btn-small btn-outline" id="clearResultsBtn" disabled>
+                                <i class="fas fa-broom"></i> Очистить
+                            </button>
+                            <button class="btn btn-small btn-warning" id="forceAssimilationBtn">
+                                <!-- Текст кнопки будет установлен через JS -->
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Индикатор загрузки -->
+                    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+                        <div class="loader">
+                            <div class="spinner"></div>
+                            <h3>Обработка PDF файла</h3>
+                            <p id="statusText">Инициализация...</p>
+
+                            <div class="progress-container">
+                                <div class="progress-bar-lg">
+                                    <div class="progress-lg" id="progressBar"></div>
+                                </div>
+                                <div class="progress-steps">
+                                    <span class="step active" data-step="1">Получение токена</span>
+                                    <span class="step" data-step="2">Загрузка файла</span>
+                                    <span class="step" data-step="3">Извлечение данных</span>
+                                    <span class="step" data-step="4">Обработка</span>
+                                </div>
+                            </div>
+
+                            <div class="loader-details">
+                                <p><i class="fas fa-clock"></i> Это может занять несколько минут...</p>
+                                <p><i class="fas fa-lightbulb"></i> Не закрывайте страницу во время обработки</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Информация о валидации -->
+                    <div class="validation-alert" id="validationAlert" style="display: none;">
+                        <div class="alert-content">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <div>
+                                <h4 id="alertTitle">Проверка данных</h4>
+                                <p id="alertMessage"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Контейнер результатов -->
+                    <div class="results-container">
+<!-- Упрощенный HTML для таблицы -->
+<div class="table-view" id="tableView" style="display: none;">
+    <div class="table-header">
+        <h3>Табличное представление</h3>
+        <div class="table-controls">
+            <button class="btn btn-small btn-outline" id="exportTableBtn" title="Экспорт таблицы">
+                Экспорт
+            </button>
+        </div>
+    </div>
+
+    <div class="table-info" id="tableInfo">
+        Загрузите файл для просмотра данных
+    </div>
+
+    <div class="table-wrapper">
+        <table id="dataTable">
+            <thead id="tableHeader">
+                <tr>
+                    <th>Characteristic</th>
+                    <!-- Колонки будут добавлены динамически -->
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- Данные будут добавлены динамически -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+                        <!-- Представление в виде JSON -->
+                        <div class="json-view" id="jsonView">
+                            <div class="json-header">
+                                <h3><i class="fas fa-code"></i> JSON данные</h3>
+                                <div class="json-info" id="jsonInfo">
+                                    Данные будут отображены здесь после обработки
+                                </div>
+                            </div>
+                            <div class="json-editor">
+                                <pre id="jsonOutput">{
+  "table_data": []
+}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Модальное окно для токена -->
+        <div class="modal" id="tokenModal" style="display: none;">
+            <div class="modal-overlay" id="modalOverlay"></div>
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-key"></i> Получение токена доступа</h3>
+                        <button class="btn-icon btn-close" id="closeTokenModal">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="token-status" id="tokenStatusContent">
+                            <div class="token-loading">
+                                <div class="spinner"></div>
+                                <p>Подключение к GigaChat API...</p>
+                            </div>
+                        </div>
+
+                        <div class="token-result" id="tokenResult" style="display: none;">
+                            <div class="success-message">
+                                <div class="success-icon">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                                <div>
+                                    <h4>Токен успешно получен!</h4>
+                                    <p>Токен будет действителен в течение 1 часа</p>
+                                </div>
+                            </div>
+
+                            <div class="token-display">
+                                <label for="tokenOutput">
+                                    <i class="fas fa-ticket-alt"></i> Ваш Access Token:
+                                </label>
+                                <div class="token-input-group">
+                                    <input type="text"
+                                           id="tokenOutput"
+                                           readonly
+                                           class="form-control token-input">
+                                    <button class="btn btn-small" id="copyTokenBtn">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <p class="token-hint">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Сохраните этот токен в безопасном месте
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="token-error" id="tokenError" style="display: none;">
+                            <div class="error-message">
+                                <div class="error-icon">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                </div>
+                                <div>
+                                    <h4>Ошибка при получении токена</h4>
+                                    <p id="errorText">Неизвестная ошибка</p>
+                                </div>
+                            </div>
+
+                            <div class="error-suggestions">
+                                <h5>Возможные решения:</h5>
+                                <ul>
+                                    <li><i class="fas fa-check"></i> Проверьте правильность API ключа</li>
+                                    <li><i class="fas fa-check"></i> Убедитесь, что у вас есть доступ к GigaChat API</li>
+                                    <li><i class="fas fa-check"></i> Проверьте подключение к интернету</li>
+                                    <li><i class="fas fa-check"></i> Попробуйте перезагрузить страницу</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" id="closeModalBtn">
+                            Закрыть
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <i class="fas fa-table"></i>
+                    <span>PDF Table Extractor</span>
+                </div>
+                <div class="footer-info">
+                    <p><i class="fas fa-code"></i> Использует GigaChat API от Сбербанка</p>
+                    <p><i class="fas fa-shield-alt"></i> Ваши данные обрабатываются локально и безопасно</p>
+                </div>
+                <div class="footer-links">
+                    <a href="#" class="footer-link"><i class="fas fa-question-circle"></i> Помощь</a>
+                    <a href="#" class="footer-link"><i class="fas fa-bug"></i> Сообщить об ошибке</a>
+                    <a href="https://developers.sber.ru" target="_blank" class="footer-link">
+                        <i class="fas fa-external-link-alt"></i> GigaChat API
+                    </a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 PDF Table Extractor. Все права защищены.</p>
+                <p class="footer-version">Версия 1.0.0</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Уведомления -->
+    <div class="notification-container" id="notificationContainer"></div>
+
+    <script src="/script.js"></script>
+</body>
+</html>
